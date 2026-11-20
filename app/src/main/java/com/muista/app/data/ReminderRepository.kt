@@ -18,6 +18,13 @@ class ReminderRepository(context: Context) {
         prefs.edit().putBoolean(KEY_MASTER_ENABLED, enabled).apply()
     }
 
+    fun getDefaultAlarmToneUri(): String? =
+        prefs.getString(KEY_DEFAULT_ALARM_TONE, null)?.ifBlank { null }
+
+    fun setDefaultAlarmToneUri(uri: String?) {
+        prefs.edit().putString(KEY_DEFAULT_ALARM_TONE, uri).apply()
+    }
+
     fun getReminders(): List<Reminder> {
         val raw = prefs.getString(KEY_REMINDERS, null) ?: return emptyList()
         return try {
@@ -134,6 +141,7 @@ class ReminderRepository(context: Context) {
     companion object {
         private const val PREFS_NAME = "muista_prefs"
         private const val KEY_MASTER_ENABLED = "master_enabled"
+        private const val KEY_DEFAULT_ALARM_TONE = "default_alarm_tone_uri"
         private const val KEY_REMINDERS = "reminders_json"
     }
 }

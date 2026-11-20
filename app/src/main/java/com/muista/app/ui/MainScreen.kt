@@ -1,5 +1,12 @@
 package com.muista.app.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -44,12 +52,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.muista.app.R
+import com.muista.app.data.ReminderRepository
 import com.muista.app.model.FINNISH_WEEKDAYS
 import com.muista.app.model.Reminder
 import com.muista.app.model.RepeatMode
@@ -68,6 +78,19 @@ fun MainScreen(
     onToggleReminder: (Reminder) -> Unit,
     onDeleteReminder: (Reminder) -> Unit
 ) {
+    val context = LocalContext.current
+    val repo = remember { ReminderRepository(context) }
+    val tonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            @Suppress("DEPRECATION")
+            val uri: Uri? = result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            repo.setDefaultAlarmToneUri(uri?.toString())
+            Toast.makeText(context, "Oletushälytysääni tallennettu", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     var editingReminder by remember { mutableStateOf<Reminder?>(null) }
     var showEditor by remember { mutableStateOf(false) }
 
@@ -133,22 +156,44 @@ fun MainScreen(
                         }
                     }
 
-                    Button(
-                        onClick = onToggleMaster,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (masterEnabled) MuistaGreen else MuistaRed,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        Text(
-                            text = if (masterEnabled) "PÄÄLLÄ" else "POIS",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 15.sp,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = {
+                                val current = repo.getDefaultAlarmToneUri()?.let { Uri.parse(it) }
+                                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Valitse oletushälytysääni")
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current)
+                                }
+                                tonePickerLauncher.launch(intent)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = "Vaihda oletushälytysääni",
+                                tint = MuistaBlue
+                            )
+                        }
+                        Button(
+                            onClick = onToggleMaster,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (masterEnabled) MuistaGreen else MuistaRed,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = if (masterEnabled) "PÄÄLLÄ" else "POIS",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 15.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }

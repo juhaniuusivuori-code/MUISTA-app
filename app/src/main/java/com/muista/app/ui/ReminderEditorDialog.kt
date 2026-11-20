@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.widget.NumberPicker
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -75,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.muista.app.alarm.RingtoneHelper
+import com.muista.app.data.ReminderRepository
 import com.muista.app.model.FINNISH_WEEKDAYS
 import com.muista.app.model.Reminder
 import com.muista.app.model.RepeatMode
@@ -95,13 +97,16 @@ fun ReminderEditorDialog(
     onSave: (Reminder) -> Unit
 ) {
     val context = LocalContext.current
+    val repo = remember { ReminderRepository(context) }
 
     var isEnabled by remember { mutableStateOf(initialReminder?.isEnabled ?: true) }
     var repeatMode by remember { mutableStateOf(initialReminder?.repeatMode ?: RepeatMode.WEEKLY) }
     var whatToRemember by remember { mutableStateOf(initialReminder?.whatToRemember ?: "") }
     var spokenText by remember { mutableStateOf(initialReminder?.spokenText ?: "") }
     var soundMode by remember { mutableStateOf(initialReminder?.soundMode ?: SoundMode.BOTH) }
-    var alarmToneUri by remember { mutableStateOf(initialReminder?.alarmToneUri) }
+    var alarmToneUri by remember {
+        mutableStateOf(initialReminder?.alarmToneUri ?: repo.getDefaultAlarmToneUri())
+    }
     var selectedDays by remember {
         mutableStateOf(initialReminder?.selectedDays ?: emptySet())
     }
@@ -564,6 +569,25 @@ fun ReminderEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    val hasDays = when (repeatMode) {
+                        RepeatMode.WEEKLY -> selectedDays.isNotEmpty()
+                        RepeatMode.MONTHLY -> monthlyDayTimes.isNotEmpty()
+                    }
+                    if (!hasDays) {
+                        if (alarmToneUri != null) {
+                            repo.setDefaultAlarmToneUri(alarmToneUri)
+                        }
+                        if (initialReminder == null && whatToRemember.isBlank() && spokenText.isBlank()) {
+                            Toast.makeText(context, "Hälytysääni tallennettu", Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        } else {
+                            Toast.makeText(context, "Valitse vähintään yksi päivä", Toast.LENGTH_SHORT).show()
+                        }
+                        return@Button
+                    }
+                    if (alarmToneUri != null) {
+                        repo.setDefaultAlarmToneUri(alarmToneUri)
+                    }
                     val saved = Reminder(
                         id = initialReminder?.id ?: java.util.UUID.randomUUID().toString(),
                         isEnabled = isEnabled,
