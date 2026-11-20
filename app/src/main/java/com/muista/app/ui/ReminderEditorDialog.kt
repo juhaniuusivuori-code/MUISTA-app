@@ -10,6 +10,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.widget.NumberPicker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -56,8 +57,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -74,6 +73,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.muista.app.alarm.RingtoneHelper
 import com.muista.app.model.FINNISH_WEEKDAYS
 import com.muista.app.model.Reminder
 import com.muista.app.model.RepeatMode
@@ -102,9 +103,7 @@ fun ReminderEditorDialog(
     var soundMode by remember { mutableStateOf(initialReminder?.soundMode ?: SoundMode.BOTH) }
     var alarmToneUri by remember { mutableStateOf(initialReminder?.alarmToneUri) }
     var selectedDays by remember {
-        mutableStateOf(
-            initialReminder?.selectedDays ?: FINNISH_WEEKDAYS.map { it.first }.toSet()
-        )
+        mutableStateOf(initialReminder?.selectedDays ?: emptySet())
     }
     var monthlyDayTimes by remember {
         mutableStateOf(initialReminder?.monthlyDayTimes ?: emptyMap())
@@ -436,7 +435,11 @@ fun ReminderEditorDialog(
                         Icon(Icons.Default.MusicNote, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (alarmToneUri == null) "Hälytysääni: Oletus (Vaihda)" else "Hälytysääni: Mukautettu (Vaihda)"
+                            text = if (alarmToneUri == null) {
+                                "Hälytysääni: Universe Bell (Vaihda)"
+                            } else {
+                                "Hälytysääni: Mukautettu (Vaihda)"
+                            }
                         )
                     }
                 }
@@ -506,20 +509,24 @@ fun ReminderEditorDialog(
                 ) {
                     (1..5).forEach { count ->
                         val selected = repeatCount == count
-                        FilterChip(
-                            selected = selected,
+                        Button(
                             onClick = { repeatCount = count },
-                            label = {
-                                Text(
-                                    text = "${count}x",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MuistaBlue,
-                                selectedLabelColor = Color.White
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selected) MuistaBlue else Color(0xFFE5E7EB),
+                                contentColor = if (selected) Color.White else MuistaBlue
                             )
-                        )
+                        ) {
+                            Text(
+                                text = "${count}x",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
 
@@ -588,31 +595,16 @@ fun ReminderEditorDialog(
     )
 
     if (showTimePicker) {
-        val timeState = rememberTimePickerState(
+        WheelTimePickerDialog(
+            title = "Valitse kellonaika (24h)",
             initialHour = hour,
             initialMinute = minute,
-            is24Hour = true
-        )
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            title = { Text("Valitse kellonaika", fontWeight = FontWeight.Bold) },
-            text = { TimePicker(state = timeState) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        hour = timeState.hour
-                        minute = timeState.minute
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("OK")
-                }
+            onConfirm = { h, m ->
+                hour = h
+                minute = m
+                showTimePicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) {
-                    Text("Peruuta")
-                }
-            }
+            onDismiss = { showTimePicker = false }
         )
     }
 
@@ -764,42 +756,101 @@ private fun MonthlyCalendarDialog(
 
     val dayToPick = pickingTimeForDay
     if (dayToPick != null) {
-        val dayTimeState = rememberTimePickerState(
+        WheelTimePickerDialog(
+            title = "Kellonaika ($dayToPick. päivä, 24h)",
             initialHour = defaultHour,
             initialMinute = defaultMinute,
-            is24Hour = true
-        )
-        AlertDialog(
-            onDismissRequest = { pickingTimeForDay = null },
-            title = {
-                Text(
-                    text = "Kellonaika ($dayToPick. päivä, 24h)",
-                    fontWeight = FontWeight.Bold,
-                    color = MuistaBlue
-                )
+            onConfirm = { h, m ->
+                onSetDayTime(dayToPick, h, m)
+                pickingTimeForDay = null
             },
-            text = { TimePicker(state = dayTimeState) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onSetDayTime(dayToPick, dayTimeState.hour, dayTimeState.minute)
-                        pickingTimeForDay = null
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MuistaBlue,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("OK", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pickingTimeForDay = null }) {
-                    Text("Peruuta", color = MuistaRed)
-                }
-            }
+            onDismiss = { pickingTimeForDay = null }
         )
     }
+}
+
+@Composable
+private fun WheelTimePickerDialog(
+    title: String,
+    initialHour: Int,
+    initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedHour by remember { mutableIntStateOf(initialHour) }
+    var selectedMinute by remember { mutableIntStateOf(initialMinute) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                color = MuistaBlue
+            )
+        },
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        NumberPicker(ctx).apply {
+                            minValue = 0
+                            maxValue = 23
+                            value = selectedHour
+                            wrapSelectorWheel = true
+                            setFormatter { String.format("%02d", it) }
+                            setOnValueChangedListener { _, _, newVal ->
+                                selectedHour = newVal
+                            }
+                        }
+                    },
+                    modifier = Modifier.width(90.dp)
+                )
+                Text(
+                    text = ":",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MuistaBlue,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                AndroidView(
+                    factory = { ctx ->
+                        NumberPicker(ctx).apply {
+                            minValue = 0
+                            maxValue = 59
+                            value = selectedMinute
+                            wrapSelectorWheel = true
+                            setFormatter { String.format("%02d", it) }
+                            setOnValueChangedListener { _, _, newVal ->
+                                selectedMinute = newVal
+                            }
+                        }
+                    },
+                    modifier = Modifier.width(90.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(selectedHour, selectedMinute) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MuistaBlue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("OK", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Peruuta", color = MuistaRed)
+            }
+        }
+    )
 }
 
 private fun testAudio(
@@ -844,9 +895,7 @@ private fun testAudio(
         return
     }
 
-    val uri = alarmToneUri?.let { Uri.parse(it) }
-        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+    val uri = RingtoneHelper.resolveAlarmUri(context, alarmToneUri)
 
     if (uri == null) {
         if (soundMode == SoundMode.BOTH) startPreviewSpeech()

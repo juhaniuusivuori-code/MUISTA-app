@@ -208,9 +208,7 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun resolveAlarmUri(reminder: Reminder): Uri? =
-        reminder.alarmToneUri?.let { Uri.parse(it) }
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        RingtoneHelper.resolveAlarmUri(this, reminder.alarmToneUri)
 
     private fun applyAlarmVolume(volumePercent: Int) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager

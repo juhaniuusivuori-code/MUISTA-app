@@ -22,13 +22,7 @@ data class Reminder(
     val spokenText: String = "",
     val soundMode: SoundMode = SoundMode.BOTH,
     val alarmToneUri: String? = null,
-    val selectedDays: Set<DayOfWeek> = setOf(
-        DayOfWeek.MONDAY,
-        DayOfWeek.TUESDAY,
-        DayOfWeek.WEDNESDAY,
-        DayOfWeek.THURSDAY,
-        DayOfWeek.FRIDAY
-    ),
+    val selectedDays: Set<DayOfWeek> = emptySet(),
     val monthlyDayTimes: Map<Int, Pair<Int, Int>> = emptyMap(),
     val hour: Int = 9,
     val minute: Int = 0,

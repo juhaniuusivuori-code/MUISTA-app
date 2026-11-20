@@ -1,7 +1,5 @@
 package com.muista.app.alarm
 
-import android.app.KeyguardManager
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -71,11 +69,6 @@ class AlarmActivity : ComponentActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
-        }
 
         val reminderId = intent.getStringExtra(AlarmScheduler.EXTRA_REMINDER_ID)
         val reminder = reminderId?.let { ReminderRepository(this).getReminderById(it) }
