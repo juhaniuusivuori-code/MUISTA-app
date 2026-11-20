@@ -131,27 +131,34 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 6.dp)
+                    ) {
                         Image(
                             painter = painterResource(id = R.drawable.muista_logo),
                             contentDescription = "MUISTA!",
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = "MUISTA!",
-                                fontSize = 26.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MuistaBlue
                             )
                             Text(
-                                text = if (masterEnabled) "Muistutukset käytössä" else "Kaikki muistutukset pois päältä",
-                                fontSize = 12.sp,
+                                text = if (masterEnabled) "Muistutukset käytössä" else "Kaikki pois päältä",
+                                fontSize = 11.sp,
                                 color = MuistaBlue.copy(alpha = 0.8f),
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
