@@ -18,6 +18,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
 import com.muista.app.R
 import com.muista.app.data.ReminderRepository
@@ -33,17 +34,8 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
     private var ttsReady = false
     private var currentReminder: Reminder? = null
     private var previousAlarmVolume: Int? = null
+    private var isStopped = false
     private val handler = Handler(Looper.getMainLooper())
-
-    private val speechRunnable = object : Runnable {
-        override fun run() {
-            val reminder = currentReminder ?: return
-            if (ttsReady && (reminder.soundMode == SoundMode.SPEECH_ONLY || reminder.soundMode == SoundMode.BOTH)) {
-                speakReminder(reminder)
-            }
-            handler.postDelayed(this, SPEECH_REPEAT_INTERVAL_MS)
-        }
-    }
 
     private val autoStopRunnable = Runnable {
         stopSelf()
@@ -65,17 +57,20 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
         }
 
         stopPlayback()
+        isStopped = false
         currentReminder = reminder
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(reminder))
 
         applyAlarmVolume(reminder.volumePercent)
 
-        if (reminder.soundMode == SoundMode.ALARM_ONLY || reminder.soundMode == SoundMode.BOTH) {
-            startAlarmSound(reminder)
-        }
-        if (reminder.soundMode == SoundMode.SPEECH_ONLY || reminder.soundMode == SoundMode.BOTH) {
-            tts = TextToSpeech(this, this)
+        when (reminder.soundMode) {
+            SoundMode.ALARM_ONLY -> startLoopingAlarmSound(reminder)
+            SoundMode.SPEECH_ONLY -> tts = TextToSpeech(this, this)
+            SoundMode.BOTH -> {
+                // Initialize TTS first; once ready, run the sequential cycle: alarm -> pause -> speech
+                tts = TextToSpeech(this, this)
+            }
         }
 
         handler.removeCallbacks(autoStopRunnable)
@@ -91,19 +86,96 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onInit(status: Int) {
+        if (isStopped) return
+        val reminder = currentReminder ?: return
+
         if (status == TextToSpeech.SUCCESS) {
             val fiLocale = Locale("fi", "FI")
             val result = tts?.setLanguage(fiLocale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 tts?.setLanguage(Locale.getDefault())
             }
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) {
+                    if (isStopped) return
+                    handler.postDelayed({
+                        if (!isStopped) startCycle(reminder)
+                    }, CYCLE_PAUSE_MS)
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    if (isStopped) return
+                    handler.postDelayed({
+                        if (!isStopped) startCycle(reminder)
+                    }, CYCLE_PAUSE_MS)
+                }
+            })
             ttsReady = true
-            handler.removeCallbacks(speechRunnable)
-            handler.post(speechRunnable)
+            startCycle(reminder)
+        } else if (reminder.soundMode == SoundMode.BOTH) {
+            // Fallback to looping alarm if TTS failed to initialize
+            startLoopingAlarmSound(reminder)
+        }
+    }
+
+    private fun startCycle(reminder: Reminder) {
+        if (isStopped) return
+        when (reminder.soundMode) {
+            SoundMode.SPEECH_ONLY -> speakReminder(reminder)
+            SoundMode.BOTH -> playAlarmBurstThenSpeak(reminder)
+            SoundMode.ALARM_ONLY -> Unit
+        }
+    }
+
+    private fun playAlarmBurstThenSpeak(reminder: Reminder) {
+        val uri = resolveAlarmUri(reminder)
+        if (uri == null) {
+            speakReminder(reminder)
+            return
+        }
+
+        releaseMediaPlayer()
+        var triggeredSpeech = false
+        val proceedToSpeech = Runnable {
+            if (!triggeredSpeech && !isStopped) {
+                triggeredSpeech = true
+                releaseMediaPlayer()
+                handler.postDelayed({
+                    if (!isStopped) speakReminder(reminder)
+                }, ALARM_TO_SPEECH_PAUSE_MS)
+            }
+        }
+
+        try {
+            val volume = (reminder.volumePercent / 100f).coerceIn(0f, 1f)
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(this@ReminderService, uri)
+                isLooping = false
+                prepare()
+                setVolume(volume, volume)
+                setOnCompletionListener {
+                    handler.removeCallbacks(proceedToSpeech)
+                    proceedToSpeech.run()
+                }
+                start()
+            }
+            // Cap long alarm ringtones at ALARM_BURST_MAX_MS so speech follows promptly
+            handler.postDelayed(proceedToSpeech, ALARM_BURST_MAX_MS)
+        } catch (_: Exception) {
+            proceedToSpeech.run()
         }
     }
 
     private fun speakReminder(reminder: Reminder) {
+        if (isStopped || !ttsReady) return
         val text = reminder.effectiveSpokenText()
         val volumeFloat = (reminder.volumePercent / 100f).coerceIn(0f, 1f)
         val params = Bundle().apply {
@@ -113,15 +185,10 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, "muista_${reminder.id}")
     }
 
-    private fun startAlarmSound(reminder: Reminder) {
-        val uri: Uri = reminder.alarmToneUri?.let { Uri.parse(it) }
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ?: return
-
+    private fun startLoopingAlarmSound(reminder: Reminder) {
+        val uri = resolveAlarmUri(reminder) ?: return
         try {
             val volume = (reminder.volumePercent / 100f).coerceIn(0f, 1f)
-            val playerVolume = if (reminder.soundMode == SoundMode.BOTH) (volume * 0.45f) else volume
             mediaPlayer = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -132,13 +199,17 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
                 setDataSource(this@ReminderService, uri)
                 isLooping = true
                 prepare()
-                setVolume(playerVolume, playerVolume)
+                setVolume(volume, volume)
                 start()
             }
         } catch (_: Exception) {
-            // Ignore playback errors if device has no default alarm sound
         }
     }
+
+    private fun resolveAlarmUri(reminder: Reminder): Uri? =
+        reminder.alarmToneUri?.let { Uri.parse(it) }
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
     private fun applyAlarmVolume(volumePercent: Int) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -150,7 +221,6 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
         try {
             audioManager.setStreamVolume(AudioManager.STREAM_ALARM, target, 0)
         } catch (_: SecurityException) {
-            // Some DND modes block changing stream volume
         }
     }
 
@@ -164,14 +234,18 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
         previousAlarmVolume = null
     }
 
-    private fun stopPlayback() {
-        handler.removeCallbacks(speechRunnable)
-        handler.removeCallbacks(autoStopRunnable)
+    private fun releaseMediaPlayer() {
         mediaPlayer?.runCatching {
             if (isPlaying) stop()
             release()
         }
         mediaPlayer = null
+    }
+
+    private fun stopPlayback() {
+        isStopped = true
+        handler.removeCallbacksAndMessages(null)
+        releaseMediaPlayer()
         tts?.runCatching {
             stop()
             shutdown()
@@ -242,7 +316,9 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
         const val ACTION_STOP = "com.muista.app.ACTION_STOP_ALARM"
         private const val CHANNEL_ID = "muista_alarms_channel"
         private const val NOTIFICATION_ID = 4201
-        private const val SPEECH_REPEAT_INTERVAL_MS = 5500L
+        private const val ALARM_BURST_MAX_MS = 3_000L
+        private const val ALARM_TO_SPEECH_PAUSE_MS = 500L
+        private const val CYCLE_PAUSE_MS = 1_500L
         private const val AUTO_STOP_MS = 60_000L
     }
 }

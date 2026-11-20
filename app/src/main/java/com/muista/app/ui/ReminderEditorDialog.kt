@@ -527,33 +527,9 @@ private fun testAudio(
     } catch (_: SecurityException) {
     }
 
-    if (soundMode == SoundMode.ALARM_ONLY || soundMode == SoundMode.BOTH) {
-        val uri = alarmToneUri?.let { Uri.parse(it) }
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        if (uri != null) {
-            try {
-                val vol = (volumePercent / 100f).coerceIn(0f, 1f)
-                val player = MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
-                    setDataSource(context, uri)
-                    prepare()
-                    setVolume(vol, vol)
-                    setOnCompletionListener { it.release() }
-                    start()
-                }
-                onPlayerCreated(player)
-            } catch (_: Exception) {
-            }
-        }
-    }
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
-    if (soundMode == SoundMode.SPEECH_ONLY || soundMode == SoundMode.BOTH) {
+    fun startPreviewSpeech() {
         lateinit var tts: TextToSpeech
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -569,5 +545,59 @@ private fun testAudio(
             }
         }
         onTtsCreated(tts)
+    }
+
+    if (soundMode == SoundMode.SPEECH_ONLY) {
+        startPreviewSpeech()
+        return
+    }
+
+    val uri = alarmToneUri?.let { Uri.parse(it) }
+        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+
+    if (uri == null) {
+        if (soundMode == SoundMode.BOTH) startPreviewSpeech()
+        return
+    }
+
+    try {
+        val vol = (volumePercent / 100f).coerceIn(0f, 1f)
+        var speechTriggered = false
+        lateinit var player: MediaPlayer
+        val proceedToSpeech = Runnable {
+            if (!speechTriggered) {
+                speechTriggered = true
+                player.runCatching {
+                    if (isPlaying) stop()
+                    release()
+                }
+                if (soundMode == SoundMode.BOTH) {
+                    handler.postDelayed({ startPreviewSpeech() }, 500L)
+                }
+            }
+        }
+        player = MediaPlayer().apply {
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            setDataSource(context, uri)
+            prepare()
+            setVolume(vol, vol)
+            setOnCompletionListener {
+                handler.removeCallbacks(proceedToSpeech)
+                proceedToSpeech.run()
+            }
+            start()
+        }
+        onPlayerCreated(player)
+        if (soundMode == SoundMode.BOTH) {
+            handler.postDelayed(proceedToSpeech, 3000L)
+        }
+    } catch (_: Exception) {
+        if (soundMode == SoundMode.BOTH) startPreviewSpeech()
     }
 }
