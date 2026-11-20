@@ -523,32 +523,30 @@ fun ReminderEditorDialog(
                     }
                 }
 
-                if (repeatCount > 1) {
+                Text(
+                    text = "Toistoväli: $repeatIntervalMinutes min (1–10 min)",
+                    fontWeight = FontWeight.Bold,
+                    color = MuistaBlue
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { if (repeatIntervalMinutes > 1) repeatIntervalMinutes-- }
+                    ) {
+                        Text("-", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
                     Text(
-                        text = "Toistoväli: $repeatIntervalMinutes min (1–10 min)",
-                        fontWeight = FontWeight.Bold,
+                        text = "$repeatIntervalMinutes min",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = MuistaBlue
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    OutlinedButton(
+                        onClick = { if (repeatIntervalMinutes < 10) repeatIntervalMinutes++ }
                     ) {
-                        OutlinedButton(
-                            onClick = { if (repeatIntervalMinutes > 1) repeatIntervalMinutes-- }
-                        ) {
-                            Text("-", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Text(
-                            text = "$repeatIntervalMinutes min",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MuistaBlue
-                        )
-                        OutlinedButton(
-                            onClick = { if (repeatIntervalMinutes < 10) repeatIntervalMinutes++ }
-                        ) {
-                            Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
