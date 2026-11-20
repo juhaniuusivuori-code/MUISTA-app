@@ -359,8 +359,13 @@ private fun ReminderCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
+                    val repeatInfo = if (reminder.repeatCount > 1) {
+                        " • ${reminder.repeatCount}x (${reminder.repeatIntervalMinutes} min)"
+                    } else {
+                        ""
+                    }
                     Text(
-                        text = "${reminder.volumePercent}% • ${reminder.soundMode.labelFi}",
+                        text = "${reminder.volumePercent}% • ${reminder.soundMode.labelFi}$repeatInfo",
                         fontSize = 12.sp,
                         color = MuistaBlue.copy(alpha = 0.75f)
                     )

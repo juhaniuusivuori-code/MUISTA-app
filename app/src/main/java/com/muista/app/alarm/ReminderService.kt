@@ -45,6 +45,7 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            currentReminder?.let { AlarmScheduler.cancelRepeatFollowUp(this, it) }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -319,6 +320,6 @@ class ReminderService : Service(), TextToSpeech.OnInitListener {
         private const val ALARM_BURST_MAX_MS = 3_000L
         private const val ALARM_TO_SPEECH_PAUSE_MS = 500L
         private const val CYCLE_PAUSE_MS = 1_500L
-        private const val AUTO_STOP_MS = 60_000L
+        private const val AUTO_STOP_MS = 45_000L
     }
 }

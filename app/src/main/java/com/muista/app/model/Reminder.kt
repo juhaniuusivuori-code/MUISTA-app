@@ -32,7 +32,9 @@ data class Reminder(
     val monthlyDayTimes: Map<Int, Pair<Int, Int>> = emptyMap(),
     val hour: Int = 9,
     val minute: Int = 0,
-    val volumePercent: Int = 80
+    val volumePercent: Int = 80,
+    val repeatCount: Int = 1,
+    val repeatIntervalMinutes: Int = 5
 ) {
     val alarmRequestCode: Int
         get() = id.hashCode()

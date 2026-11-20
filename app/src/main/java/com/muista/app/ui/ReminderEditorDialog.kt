@@ -112,6 +112,8 @@ fun ReminderEditorDialog(
     var hour by remember { mutableIntStateOf(initialReminder?.hour ?: 9) }
     var minute by remember { mutableIntStateOf(initialReminder?.minute ?: 0) }
     var volumePercent by remember { mutableIntStateOf(initialReminder?.volumePercent ?: 80) }
+    var repeatCount by remember { mutableIntStateOf(initialReminder?.repeatCount ?: 1) }
+    var repeatIntervalMinutes by remember { mutableIntStateOf(initialReminder?.repeatIntervalMinutes ?: 5) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showMonthlyCalendar by remember { mutableStateOf(false) }
 
@@ -491,6 +493,64 @@ fun ReminderEditorDialog(
                         inactiveTrackColor = Color(0xFFD0D7DE)
                     )
                 )
+
+                // Hälytyksen toisto (1-5 kertaa) ja toistoväli (1-10 min)
+                Text(
+                    text = "Hälytyksen toisto (1–5 kertaa)",
+                    fontWeight = FontWeight.Bold,
+                    color = MuistaBlue
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    (1..5).forEach { count ->
+                        val selected = repeatCount == count
+                        FilterChip(
+                            selected = selected,
+                            onClick = { repeatCount = count },
+                            label = {
+                                Text(
+                                    text = "${count}x",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MuistaBlue,
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                    }
+                }
+
+                if (repeatCount > 1) {
+                    Text(
+                        text = "Toistoväli: $repeatIntervalMinutes min (1–10 min)",
+                        fontWeight = FontWeight.Bold,
+                        color = MuistaBlue
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { if (repeatIntervalMinutes > 1) repeatIntervalMinutes-- }
+                        ) {
+                            Text("-", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(
+                            text = "$repeatIntervalMinutes min",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MuistaBlue
+                        )
+                        OutlinedButton(
+                            onClick = { if (repeatIntervalMinutes < 10) repeatIntervalMinutes++ }
+                        ) {
+                            Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -508,7 +568,9 @@ fun ReminderEditorDialog(
                         monthlyDayTimes = monthlyDayTimes,
                         hour = hour,
                         minute = minute,
-                        volumePercent = volumePercent
+                        volumePercent = volumePercent,
+                        repeatCount = repeatCount,
+                        repeatIntervalMinutes = repeatIntervalMinutes
                     )
                     onSave(saved)
                 },

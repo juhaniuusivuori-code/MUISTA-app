@@ -16,6 +16,7 @@ import java.time.ZonedDateTime
 object AlarmScheduler {
 
     const val EXTRA_REMINDER_ID = "extra_reminder_id"
+    const val EXTRA_REMAINING_REPEATS = "extra_remaining_repeats"
 
     fun computeNextTriggerMillis(reminder: Reminder, now: ZonedDateTime = ZonedDateTime.now()): Long? {
         return when (reminder.repeatMode) {
@@ -87,6 +88,35 @@ object AlarmScheduler {
     fun cancelReminder(context: Context, reminder: Reminder) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.cancel(buildPendingIntent(context, reminder))
+        cancelRepeatFollowUp(context, reminder)
+    }
+
+    fun scheduleRepeatFollowUp(context: Context, reminder: Reminder, remainingRepeats: Int) {
+        if (remainingRepeats <= 0) return
+        val triggerAtMillis = System.currentTimeMillis() + reminder.repeatIntervalMinutes * 60_000L
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pendingIntent = buildRepeatPendingIntent(context, reminder, remainingRepeats)
+        val showIntent = PendingIntent.getActivity(
+            context,
+            reminder.alarmRequestCode,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            } else {
+                val info = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
+                alarmManager.setAlarmClock(info, pendingIntent)
+            }
+        } catch (_: SecurityException) {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        }
+    }
+
+    fun cancelRepeatFollowUp(context: Context, reminder: Reminder) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(buildRepeatPendingIntent(context, reminder, 0))
     }
 
     fun rescheduleAll(context: Context) {
@@ -101,10 +131,30 @@ object AlarmScheduler {
             action = "com.muista.app.ACTION_TRIGGER_REMINDER"
             data = Uri.parse("muista://reminder/${reminder.id}")
             putExtra(EXTRA_REMINDER_ID, reminder.id)
+            putExtra(EXTRA_REMAINING_REPEATS, -1)
         }
         return PendingIntent.getBroadcast(
             context,
             reminder.alarmRequestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun buildRepeatPendingIntent(
+        context: Context,
+        reminder: Reminder,
+        remainingRepeats: Int
+    ): PendingIntent {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            action = "com.muista.app.ACTION_REPEAT_REMINDER"
+            data = Uri.parse("muista://repeat/${reminder.id}")
+            putExtra(EXTRA_REMINDER_ID, reminder.id)
+            putExtra(EXTRA_REMAINING_REPEATS, remainingRepeats)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            reminder.alarmRequestCode xor 0x5A5A,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

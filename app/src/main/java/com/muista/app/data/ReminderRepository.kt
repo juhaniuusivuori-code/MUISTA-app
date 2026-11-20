@@ -60,6 +60,8 @@ class ReminderRepository(context: Context) {
             put("hour", reminder.hour)
             put("minute", reminder.minute)
             put("volumePercent", reminder.volumePercent)
+            put("repeatCount", reminder.repeatCount)
+            put("repeatIntervalMinutes", reminder.repeatIntervalMinutes)
         }
     }
 
@@ -123,7 +125,9 @@ class ReminderRepository(context: Context) {
             monthlyDayTimes = monthlyDayTimes,
             hour = defaultHour,
             minute = defaultMinute,
-            volumePercent = obj.optInt("volumePercent", 80).coerceIn(0, 100)
+            volumePercent = obj.optInt("volumePercent", 80).coerceIn(0, 100),
+            repeatCount = obj.optInt("repeatCount", 1).coerceIn(1, 5),
+            repeatIntervalMinutes = obj.optInt("repeatIntervalMinutes", 5).coerceIn(1, 10)
         )
     }
 
