@@ -7,6 +7,8 @@ import com.muista.app.model.SoundMode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
 
 class ReminderRepository(context: Context) {
 
@@ -51,8 +53,8 @@ class ReminderRepository(context: Context) {
         val daysArray = JSONArray()
         reminder.selectedDays.forEach { daysArray.put(it.value) }
         val monthlyTimesObj = JSONObject()
-        reminder.monthlyDayTimes.toSortedMap().forEach { (day, hm) ->
-            monthlyTimesObj.put(day.toString(), String.format("%02d:%02d", hm.first, hm.second))
+        reminder.monthlyDateTimes.toSortedMap().forEach { (date, hm) ->
+            monthlyTimesObj.put(date.toString(), String.format("%02d:%02d", hm.first, hm.second))
         }
         return JSONObject().apply {
             put("id", reminder.id)
@@ -63,7 +65,7 @@ class ReminderRepository(context: Context) {
             put("soundMode", reminder.soundMode.name)
             put("alarmToneUri", reminder.alarmToneUri ?: JSONObject.NULL)
             put("selectedDays", daysArray)
-            put("monthlyDayTimes", monthlyTimesObj)
+            put("monthlyDateTimes", monthlyTimesObj)
             put("hour", reminder.hour)
             put("minute", reminder.minute)
             put("volumePercent", reminder.volumePercent)
@@ -83,32 +85,36 @@ class ReminderRepository(context: Context) {
         val defaultHour = obj.optInt("hour", 9).coerceIn(0, 23)
         val defaultMinute = obj.optInt("minute", 0).coerceIn(0, 59)
 
+        val monthlyDateTimesObj = obj.optJSONObject("monthlyDateTimes")
         val monthlyTimesObj = obj.optJSONObject("monthlyDayTimes")
-        val monthlyDayTimes: Map<Int, Pair<Int, Int>> = if (monthlyTimesObj != null) {
+        val monthlyDateTimes: Map<LocalDate, Pair<Int, Int>> = if (monthlyDateTimesObj != null) {
+            buildMap {
+                val keys = monthlyDateTimesObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val date = runCatching { LocalDate.parse(key) }.getOrNull() ?: continue
+                    val parts = monthlyDateTimesObj.optString(key, "").split(":")
+                    val h = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: defaultHour
+                    val m = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: defaultMinute
+                    put(date, h to m)
+                }
+            }
+        } else if (monthlyTimesObj != null) {
+            val ym = YearMonth.now()
             buildMap {
                 val keys = monthlyTimesObj.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
                     val day = key.toIntOrNull() ?: continue
-                    if (day !in 1..31) continue
+                    if (day !in 1..ym.lengthOfMonth()) continue
                     val parts = monthlyTimesObj.optString(key, "").split(":")
                     val h = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: defaultHour
                     val m = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: defaultMinute
-                    put(day, h to m)
+                    put(ym.atDay(day), h to m)
                 }
             }
         } else {
-            val monthlyDaysJson = obj.optJSONArray("monthlyDays")
-            if (monthlyDaysJson != null) {
-                buildMap {
-                    for (i in 0 until monthlyDaysJson.length()) {
-                        val value = monthlyDaysJson.optInt(i, -1)
-                        if (value in 1..31) put(value, defaultHour to defaultMinute)
-                    }
-                }
-            } else {
-                emptyMap()
-            }
+            emptyMap()
         }
         val repeatMode = runCatching {
             RepeatMode.valueOf(obj.optString("repeatMode", RepeatMode.WEEKLY.name))
@@ -129,7 +135,7 @@ class ReminderRepository(context: Context) {
             soundMode = soundMode,
             alarmToneUri = tone,
             selectedDays = days,
-            monthlyDayTimes = monthlyDayTimes,
+            monthlyDateTimes = monthlyDateTimes,
             hour = defaultHour,
             minute = defaultMinute,
             volumePercent = obj.optInt("volumePercent", 80).coerceIn(0, 100),

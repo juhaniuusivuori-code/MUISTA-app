@@ -302,7 +302,9 @@ private fun ReminderCard(
                     val headerTime = if (reminder.repeatMode == RepeatMode.WEEKLY) {
                         reminder.formattedTime()
                     } else {
-                        reminder.monthlyDayTimes.values.minByOrNull { it.first * 60 + it.second }
+                        reminder.monthlyDateTimes.entries
+                            .minByOrNull { it.key }
+                            ?.value
                             ?.let { String.format("%02d:%02d", it.first, it.second) }
                             ?: "--:--"
                     }

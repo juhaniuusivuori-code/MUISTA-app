@@ -1,6 +1,7 @@
 package com.muista.app.model
 
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.util.UUID
 
 enum class RepeatMode {
@@ -23,7 +24,7 @@ data class Reminder(
     val soundMode: SoundMode = SoundMode.BOTH,
     val alarmToneUri: String? = null,
     val selectedDays: Set<DayOfWeek> = emptySet(),
-    val monthlyDayTimes: Map<Int, Pair<Int, Int>> = emptyMap(),
+    val monthlyDateTimes: Map<LocalDate, Pair<Int, Int>> = emptyMap(),
     val hour: Int = 9,
     val minute: Int = 0,
     val volumePercent: Int = 80,
@@ -36,11 +37,11 @@ data class Reminder(
     fun formattedTime(): String = String.format("%02d:%02d", hour, minute)
 
     fun formattedMonthlySchedule(): String {
-        if (monthlyDayTimes.isEmpty()) return "Ei päiviä valittu"
-        return monthlyDayTimes.entries
+        if (monthlyDateTimes.isEmpty()) return "Ei päiviä valittu"
+        return monthlyDateTimes.entries
             .sortedBy { it.key }
-            .joinToString(", ") { (day, hm) ->
-                String.format("%d. (%02d:%02d)", day, hm.first, hm.second)
+            .joinToString(", ") { (date, hm) ->
+                String.format("%d.%d.%d (%02d:%02d)", date.dayOfMonth, date.monthValue, date.year, hm.first, hm.second)
             }
     }
 

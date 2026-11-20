@@ -37,23 +37,13 @@ object AlarmScheduler {
             }
 
             RepeatMode.MONTHLY -> {
-                if (reminder.monthlyDayTimes.isEmpty()) return null
-                val thisYm = YearMonth.from(now)
-                val candidates = buildList {
-                    for (monthOffset in 0L..1L) {
-                        val ym = thisYm.plusMonths(monthOffset)
-                        for ((dayOfMonth, hm) in reminder.monthlyDayTimes) {
-                            val clampedDay = dayOfMonth.coerceAtMost(ym.lengthOfMonth())
-                            val candidate = ym.atDay(clampedDay)
-                                .atTime(hm.first, hm.second, 0, 0)
-                                .atZone(now.zone)
-                            if (candidate.isAfter(now)) {
-                                add(candidate.toInstant().toEpochMilli())
-                            }
-                        }
+                if (reminder.monthlyDateTimes.isEmpty()) return null
+                reminder.monthlyDateTimes.entries
+                    .map { (date, hm) ->
+                        date.atTime(hm.first, hm.second, 0, 0).atZone(now.zone)
                     }
-                }
-                candidates.minOrNull()
+                    .filter { it.isAfter(now) }
+                    .minOfOrNull { it.toInstant().toEpochMilli() }
             }
         }
     }

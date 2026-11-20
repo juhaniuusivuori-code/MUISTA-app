@@ -39,6 +39,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VolumeUp
@@ -85,6 +87,7 @@ import com.muista.app.ui.theme.MuistaBlue
 import com.muista.app.ui.theme.MuistaGreen
 import com.muista.app.ui.theme.MuistaRed
 import com.muista.app.ui.theme.MuistaYellow
+import java.time.LocalDate
 import java.time.YearMonth
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -110,8 +113,8 @@ fun ReminderEditorDialog(
     var selectedDays by remember {
         mutableStateOf(initialReminder?.selectedDays ?: emptySet())
     }
-    var monthlyDayTimes by remember {
-        mutableStateOf(initialReminder?.monthlyDayTimes ?: emptyMap())
+    var monthlyDateTimes by remember {
+        mutableStateOf(initialReminder?.monthlyDateTimes ?: emptyMap())
     }
     var hour by remember { mutableIntStateOf(initialReminder?.hour ?: 9) }
     var minute by remember { mutableIntStateOf(initialReminder?.minute ?: 0) }
@@ -310,13 +313,13 @@ fun ReminderEditorDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (monthlyDayTimes.isEmpty()) {
+                                    text = if (monthlyDateTimes.isEmpty()) {
                                         "Ei päiviä valittu"
                                     } else {
-                                        monthlyDayTimes.entries
+                                        monthlyDateTimes.entries
                                             .sortedBy { it.key }
                                             .joinToString(", ") { (d, hm) ->
-                                                String.format("%d. (%02d:%02d)", d, hm.first, hm.second)
+                                                String.format("%d.%d.%d (%02d:%02d)", d.dayOfMonth, d.monthValue, d.year, hm.first, hm.second)
                                             }
                                     },
                                     fontWeight = FontWeight.Bold,
@@ -571,7 +574,7 @@ fun ReminderEditorDialog(
                 onClick = {
                     val hasDays = when (repeatMode) {
                         RepeatMode.WEEKLY -> selectedDays.isNotEmpty()
-                        RepeatMode.MONTHLY -> monthlyDayTimes.isNotEmpty()
+                        RepeatMode.MONTHLY -> monthlyDateTimes.isNotEmpty()
                     }
                     if (!hasDays) {
                         if (alarmToneUri != null) {
@@ -597,7 +600,7 @@ fun ReminderEditorDialog(
                         soundMode = soundMode,
                         alarmToneUri = alarmToneUri,
                         selectedDays = selectedDays,
-                        monthlyDayTimes = monthlyDayTimes,
+                        monthlyDateTimes = monthlyDateTimes,
                         hour = hour,
                         minute = minute,
                         volumePercent = volumePercent,
@@ -637,34 +640,33 @@ fun ReminderEditorDialog(
 
     if (showMonthlyCalendar) {
         MonthlyCalendarDialog(
-            selectedDayTimes = monthlyDayTimes,
+            selectedDateTimes = monthlyDateTimes,
             defaultHour = hour,
             defaultMinute = minute,
-            onSetDayTime = { day, h, m ->
-                monthlyDayTimes = monthlyDayTimes + (day to (h to m))
+            onSetDateTime = { date, h, m ->
+                monthlyDateTimes = monthlyDateTimes + (date to (h to m))
             },
-            onRemoveDay = { day ->
-                monthlyDayTimes = monthlyDayTimes - day
+            onRemoveDate = { date ->
+                monthlyDateTimes = monthlyDateTimes - date
             },
-            onClearAll = { monthlyDayTimes = emptyMap() },
+            onClearAll = { monthlyDateTimes = emptyMap() },
             onDismiss = { showMonthlyCalendar = false }
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MonthlyCalendarDialog(
-    selectedDayTimes: Map<Int, Pair<Int, Int>>,
+    selectedDateTimes: Map<LocalDate, Pair<Int, Int>>,
     defaultHour: Int,
     defaultMinute: Int,
-    onSetDayTime: (Int, Int, Int) -> Unit,
-    onRemoveDay: (Int) -> Unit,
+    onSetDateTime: (LocalDate, Int, Int) -> Unit,
+    onRemoveDate: (LocalDate) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var pickingTimeForDay by remember { mutableStateOf<Int?>(null) }
-    val currentMonth = remember { YearMonth.now() }
+    var pickingTimeForDate by remember { mutableStateOf<LocalDate?>(null) }
+    var displayedMonth by remember { mutableStateOf(YearMonth.now()) }
     val monthNamesFi = remember {
         listOf(
             "Tammikuu", "Helmikuu", "Maaliskuu", "Huhtikuu",
@@ -672,9 +674,9 @@ private fun MonthlyCalendarDialog(
             "Syyskuu", "Lokakuu", "Marraskuu", "Joulukuu"
         )
     }
-    val monthTitle = "${monthNamesFi[currentMonth.monthValue - 1]} ${currentMonth.year}"
-    val firstDayOffset = currentMonth.atDay(1).dayOfWeek.value - 1 // 0 = Ma .. 6 = Su
-    val daysInMonth = currentMonth.lengthOfMonth()
+    val monthTitle = "${monthNamesFi[displayedMonth.monthValue - 1]} ${displayedMonth.year}"
+    val firstDayOffset = displayedMonth.atDay(1).dayOfWeek.value - 1 // 0 = Ma .. 6 = Su
+    val daysInMonth = displayedMonth.lengthOfMonth()
     val totalCells = firstDayOffset + daysInMonth
     val weeks = (totalCells + 6) / 7
 
@@ -682,14 +684,34 @@ private fun MonthlyCalendarDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronLeft,
+                            contentDescription = "Edellinen kuukausi",
+                            tint = MuistaBlue
+                        )
+                    }
+                    Text(
+                        text = monthTitle,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = MuistaBlue
+                    )
+                    IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Seuraava kuukausi",
+                            tint = MuistaBlue
+                        )
+                    }
+                }
                 Text(
-                    text = monthTitle,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
-                    color = MuistaBlue
-                )
-                Text(
-                    text = "Paina päivää asettaaksesi ajan (24h). Uusi painallus poistaa.",
+                    text = "Selaa kuukausia (< >) ja paina päivää asettaaksesi ajan (24h).",
                     fontSize = 12.sp,
                     color = MuistaBlue.copy(alpha = 0.75f)
                 )
@@ -718,7 +740,8 @@ private fun MonthlyCalendarDialog(
                             val cellIndex = week * 7 + col
                             val dayNumber = cellIndex - firstDayOffset + 1
                             if (dayNumber in 1..daysInMonth) {
-                                val assignedTime = selectedDayTimes[dayNumber]
+                                val date = displayedMonth.atDay(dayNumber)
+                                val assignedTime = selectedDateTimes[date]
                                 val isSelected = assignedTime != null
                                 Box(
                                     modifier = Modifier
@@ -730,9 +753,9 @@ private fun MonthlyCalendarDialog(
                                         )
                                         .clickable {
                                             if (isSelected) {
-                                                onRemoveDay(dayNumber)
+                                                onRemoveDate(date)
                                             } else {
-                                                pickingTimeForDay = dayNumber
+                                                pickingTimeForDate = date
                                             }
                                         },
                                     contentAlignment = Alignment.Center
@@ -781,17 +804,17 @@ private fun MonthlyCalendarDialog(
         }
     )
 
-    val dayToPick = pickingTimeForDay
-    if (dayToPick != null) {
+    val dateToPick = pickingTimeForDate
+    if (dateToPick != null) {
         WheelTimePickerDialog(
-            title = "Kellonaika ($dayToPick. päivä, 24h)",
+            title = "Kellonaika (${dateToPick.dayOfMonth}.${dateToPick.monthValue}.${dateToPick.year}, 24h)",
             initialHour = defaultHour,
             initialMinute = defaultMinute,
             onConfirm = { h, m ->
-                onSetDayTime(dayToPick, h, m)
-                pickingTimeForDay = null
+                onSetDateTime(dateToPick, h, m)
+                pickingTimeForDate = null
             },
-            onDismiss = { pickingTimeForDay = null }
+            onDismiss = { pickingTimeForDate = null }
         )
     }
 }
