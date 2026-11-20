@@ -107,7 +107,7 @@ fun ReminderEditorDialog(
         )
     }
     var monthlyDays by remember {
-        mutableStateOf(initialReminder?.monthlyDays ?: setOf(java.time.LocalDate.now().dayOfMonth))
+        mutableStateOf(initialReminder?.monthlyDays ?: emptySet())
     }
     var hour by remember { mutableIntStateOf(initialReminder?.hour ?: 9) }
     var minute by remember { mutableIntStateOf(initialReminder?.minute ?: 0) }
@@ -556,6 +556,7 @@ fun ReminderEditorDialog(
             onToggleDay = { day ->
                 monthlyDays = if (day in monthlyDays) monthlyDays - day else monthlyDays + day
             },
+            onClearAll = { monthlyDays = emptySet() },
             onDismiss = { showMonthlyCalendar = false }
         )
     }
@@ -565,6 +566,7 @@ fun ReminderEditorDialog(
 private fun MonthlyCalendarDialog(
     selectedDays: Set<Int>,
     onToggleDay: (Int) -> Unit,
+    onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val currentMonth = remember { YearMonth.now() }
@@ -657,6 +659,11 @@ private fun MonthlyCalendarDialog(
                 )
             ) {
                 Text("VALMIS", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClearAll) {
+                Text("TYHJENNÄ", color = MuistaRed, fontWeight = FontWeight.Bold)
             }
         }
     )
