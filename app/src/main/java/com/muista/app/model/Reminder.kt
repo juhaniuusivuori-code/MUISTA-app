@@ -29,7 +29,7 @@ data class Reminder(
         DayOfWeek.THURSDAY,
         DayOfWeek.FRIDAY
     ),
-    val monthlyDay: Int = 1,
+    val monthlyDays: Set<Int> = setOf(1),
     val hour: Int = 9,
     val minute: Int = 0,
     val volumePercent: Int = 80

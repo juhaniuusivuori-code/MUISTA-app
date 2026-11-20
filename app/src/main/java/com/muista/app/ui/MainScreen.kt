@@ -145,7 +145,9 @@ fun MainScreen(
                         Text(
                             text = if (masterEnabled) "PÄÄLLÄ" else "POIS",
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 15.sp
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -284,7 +286,9 @@ private fun ReminderCard(
                         Text(
                             text = if (reminder.isEnabled) "PÄÄLLÄ" else "POIS",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                     IconButton(onClick = onDelete) {
@@ -330,7 +334,11 @@ private fun ReminderCard(
                         .joinToString(", ") { it.second }
                     dayLabels.ifEmpty { "Ei päiviä valittu" }
                 } else {
-                    "Joka kuukauden ${reminder.monthlyDay}. päivä"
+                    if (reminder.monthlyDays.isEmpty()) {
+                        "Ei päiviä valittu"
+                    } else {
+                        "Kuukauden päivät: " + reminder.monthlyDays.sorted().joinToString(", ") { "$it." }
+                    }
                 }
 
                 Text(

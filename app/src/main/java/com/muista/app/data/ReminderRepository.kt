@@ -43,6 +43,8 @@ class ReminderRepository(context: Context) {
     private fun toJson(reminder: Reminder): JSONObject {
         val daysArray = JSONArray()
         reminder.selectedDays.forEach { daysArray.put(it.value) }
+        val monthlyDaysArray = JSONArray()
+        reminder.monthlyDays.sorted().forEach { monthlyDaysArray.put(it) }
         return JSONObject().apply {
             put("id", reminder.id)
             put("isEnabled", reminder.isEnabled)
@@ -52,7 +54,7 @@ class ReminderRepository(context: Context) {
             put("soundMode", reminder.soundMode.name)
             put("alarmToneUri", reminder.alarmToneUri ?: JSONObject.NULL)
             put("selectedDays", daysArray)
-            put("monthlyDay", reminder.monthlyDay)
+            put("monthlyDays", monthlyDaysArray)
             put("hour", reminder.hour)
             put("minute", reminder.minute)
             put("volumePercent", reminder.volumePercent)
@@ -66,6 +68,17 @@ class ReminderRepository(context: Context) {
                 val value = daysJson.optInt(i, -1)
                 if (value in 1..7) add(DayOfWeek.of(value))
             }
+        }
+        val monthlyDaysJson = obj.optJSONArray("monthlyDays")
+        val monthlyDays = if (monthlyDaysJson != null) {
+            buildSet {
+                for (i in 0 until monthlyDaysJson.length()) {
+                    val value = monthlyDaysJson.optInt(i, -1)
+                    if (value in 1..31) add(value)
+                }
+            }
+        } else {
+            setOf(obj.optInt("monthlyDay", 1).coerceIn(1, 31))
         }
         val repeatMode = runCatching {
             RepeatMode.valueOf(obj.optString("repeatMode", RepeatMode.WEEKLY.name))
@@ -86,7 +99,7 @@ class ReminderRepository(context: Context) {
             soundMode = soundMode,
             alarmToneUri = tone,
             selectedDays = days,
-            monthlyDay = obj.optInt("monthlyDay", 1).coerceIn(1, 31),
+            monthlyDays = monthlyDays,
             hour = obj.optInt("hour", 9).coerceIn(0, 23),
             minute = obj.optInt("minute", 0).coerceIn(0, 59),
             volumePercent = obj.optInt("volumePercent", 80).coerceIn(0, 100)

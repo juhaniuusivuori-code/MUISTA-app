@@ -13,23 +13,29 @@ import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -61,9 +67,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.muista.app.model.FINNISH_WEEKDAYS
@@ -74,6 +82,7 @@ import com.muista.app.ui.theme.MuistaBlue
 import com.muista.app.ui.theme.MuistaGreen
 import com.muista.app.ui.theme.MuistaRed
 import com.muista.app.ui.theme.MuistaYellow
+import java.time.YearMonth
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -97,11 +106,14 @@ fun ReminderEditorDialog(
             initialReminder?.selectedDays ?: FINNISH_WEEKDAYS.map { it.first }.toSet()
         )
     }
-    var monthlyDay by remember { mutableIntStateOf(initialReminder?.monthlyDay ?: 1) }
+    var monthlyDays by remember {
+        mutableStateOf(initialReminder?.monthlyDays ?: setOf(java.time.LocalDate.now().dayOfMonth))
+    }
     var hour by remember { mutableIntStateOf(initialReminder?.hour ?: 9) }
     var minute by remember { mutableIntStateOf(initialReminder?.minute ?: 0) }
     var volumePercent by remember { mutableIntStateOf(initialReminder?.volumePercent ?: 80) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showMonthlyCalendar by remember { mutableStateOf(false) }
 
     val ringtoneLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -138,9 +150,12 @@ fun ReminderEditorDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (initialReminder == null) "Uusi muistutus" else "Muokkaa muistutusta",
+                    text = if (initialReminder == null) "Uusi muistutus" else "Muokkaa",
                     fontWeight = FontWeight.ExtraBold,
-                    color = MuistaBlue
+                    fontSize = 19.sp,
+                    color = MuistaBlue,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
                 Button(
                     onClick = { isEnabled = !isEnabled },
@@ -148,11 +163,14 @@ fun ReminderEditorDialog(
                         containerColor = if (isEnabled) MuistaGreen else Color.Gray,
                         contentColor = Color.White
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = if (isEnabled) "PÄÄLLÄ" else "POIS",
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -191,7 +209,10 @@ fun ReminderEditorDialog(
                         )
                     }
                     Button(
-                        onClick = { repeatMode = RepeatMode.MONTHLY },
+                        onClick = {
+                            repeatMode = RepeatMode.MONTHLY
+                            showMonthlyCalendar = true
+                        },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (!isWeekly) MuistaBlue else Color(0xFFE0E0E0),
@@ -255,29 +276,49 @@ fun ReminderEditorDialog(
                     }
                 } else {
                     Text(
-                        text = "Kuukauden päivä (1–31)",
+                        text = "Kuukauden päivät",
                         fontWeight = FontWeight.Bold,
                         color = MuistaBlue
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showMonthlyCalendar = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFFFF8DC),
+                        border = BorderStroke(1.5.dp, MuistaBlue)
                     ) {
-                        OutlinedButton(
-                            onClick = { if (monthlyDay > 1) monthlyDay-- }
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("-", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Text(
-                            text = "$monthlyDay. päivä",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MuistaBlue
-                        )
-                        OutlinedButton(
-                            onClick = { if (monthlyDay < 31) monthlyDay++ }
-                        ) {
-                            Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = MuistaBlue
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (monthlyDays.isEmpty()) {
+                                        "Ei päiviä valittu"
+                                    } else {
+                                        monthlyDays.sorted().joinToString(", ") { "$it." }
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    color = MuistaBlue
+                                )
+                            }
+                            Text(
+                                text = "Valitse kalenterista",
+                                color = MuistaRed,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
                         }
                     }
                 }
@@ -458,7 +499,7 @@ fun ReminderEditorDialog(
                         soundMode = soundMode,
                         alarmToneUri = alarmToneUri,
                         selectedDays = selectedDays,
-                        monthlyDay = monthlyDay,
+                        monthlyDays = monthlyDays,
                         hour = hour,
                         minute = minute,
                         volumePercent = volumePercent
@@ -508,6 +549,117 @@ fun ReminderEditorDialog(
             }
         )
     }
+
+    if (showMonthlyCalendar) {
+        MonthlyCalendarDialog(
+            selectedDays = monthlyDays,
+            onToggleDay = { day ->
+                monthlyDays = if (day in monthlyDays) monthlyDays - day else monthlyDays + day
+            },
+            onDismiss = { showMonthlyCalendar = false }
+        )
+    }
+}
+
+@Composable
+private fun MonthlyCalendarDialog(
+    selectedDays: Set<Int>,
+    onToggleDay: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val currentMonth = remember { YearMonth.now() }
+    val monthNamesFi = remember {
+        listOf(
+            "Tammikuu", "Helmikuu", "Maaliskuu", "Huhtikuu",
+            "Toukokuu", "Kesäkuu", "Heinäkuu", "Elokuu",
+            "Syyskuu", "Lokakuu", "Marraskuu", "Joulukuu"
+        )
+    }
+    val monthTitle = "${monthNamesFi[currentMonth.monthValue - 1]} ${currentMonth.year}"
+    val firstDayOffset = currentMonth.atDay(1).dayOfWeek.value - 1 // 0 = Ma .. 6 = Su
+    val daysInMonth = currentMonth.lengthOfMonth()
+    val totalCells = firstDayOffset + daysInMonth
+    val weeks = (totalCells + 6) / 7
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = monthTitle,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp,
+                    color = MuistaBlue
+                )
+                Text(
+                    text = "Paina päiviä, joina muistutus tulee",
+                    fontSize = 13.sp,
+                    color = MuistaBlue.copy(alpha = 0.75f)
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    listOf("Ma", "Ti", "Ke", "To", "Pe", "La", "Su").forEach { label ->
+                        Text(
+                            text = label,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MuistaBlue
+                        )
+                    }
+                }
+                for (week in 0 until weeks) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        for (col in 0..6) {
+                            val cellIndex = week * 7 + col
+                            val dayNumber = cellIndex - firstDayOffset + 1
+                            if (dayNumber in 1..daysInMonth) {
+                                val isSelected = dayNumber in selectedDays
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) MuistaYellow else Color(0xFFF3F4F6)
+                                        )
+                                        .clickable { onToggleDay(dayNumber) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$dayNumber",
+                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                        fontSize = 14.sp,
+                                        color = if (isSelected) MuistaRed else MuistaBlue
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MuistaBlue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("VALMIS", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }
 
 private fun testAudio(
