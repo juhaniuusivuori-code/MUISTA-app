@@ -418,14 +418,20 @@ fun ReminderEditorDialog(
                 }
 
                 if (soundMode != SoundMode.SPEECH_ONLY) {
+                    val toneTitle = remember(alarmToneUri) {
+                        RingtoneHelper.getToneTitle(context, alarmToneUri)
+                    }
                     OutlinedButton(
                         onClick = {
                             val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                                 putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
                                 putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Valitse hälytysääni")
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
                                 putExtra(
                                     RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
                                     alarmToneUri?.let { Uri.parse(it) }
+                                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                                 )
                             }
                             ringtoneLauncher.launch(intent)
@@ -435,11 +441,8 @@ fun ReminderEditorDialog(
                         Icon(Icons.Default.MusicNote, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (alarmToneUri == null) {
-                                "Hälytysääni: Universe Bell (Vaihda)"
-                            } else {
-                                "Hälytysääni: Mukautettu (Vaihda)"
-                            }
+                            text = "Hälytysääni: $toneTitle (Vaihda)",
+                            maxLines = 1
                         )
                     }
                 }
