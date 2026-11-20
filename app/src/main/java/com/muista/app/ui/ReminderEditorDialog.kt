@@ -106,8 +106,8 @@ fun ReminderEditorDialog(
             initialReminder?.selectedDays ?: FINNISH_WEEKDAYS.map { it.first }.toSet()
         )
     }
-    var monthlyDays by remember {
-        mutableStateOf(initialReminder?.monthlyDays ?: emptySet())
+    var monthlyDayTimes by remember {
+        mutableStateOf(initialReminder?.monthlyDayTimes ?: emptyMap())
     }
     var hour by remember { mutableIntStateOf(initialReminder?.hour ?: 9) }
     var minute by remember { mutableIntStateOf(initialReminder?.minute ?: 0) }
@@ -304,10 +304,14 @@ fun ReminderEditorDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (monthlyDays.isEmpty()) {
+                                    text = if (monthlyDayTimes.isEmpty()) {
                                         "Ei päiviä valittu"
                                     } else {
-                                        monthlyDays.sorted().joinToString(", ") { "$it." }
+                                        monthlyDayTimes.entries
+                                            .sortedBy { it.key }
+                                            .joinToString(", ") { (d, hm) ->
+                                                String.format("%d. (%02d:%02d)", d, hm.first, hm.second)
+                                            }
                                     },
                                     fontWeight = FontWeight.Bold,
                                     color = MuistaBlue
@@ -323,44 +327,46 @@ fun ReminderEditorDialog(
                     }
                 }
 
-                // Kellonaika
-                Text(
-                    text = "Kellonaika",
-                    fontWeight = FontWeight.Bold,
-                    color = MuistaBlue
-                )
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showTimePicker = true },
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFFFF8DC),
-                    border = BorderStroke(1.5.dp, MuistaBlue)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                // Kellonaika (näytetään viikkomuistutukselle; kuukausimuistutuksessa jokaisella päivällä on oma aika)
+                if (repeatMode == RepeatMode.WEEKLY) {
+                    Text(
+                        text = "Kellonaika (24h)",
+                        fontWeight = FontWeight.Bold,
+                        color = MuistaBlue
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTimePicker = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFFFF8DC),
+                        border = BorderStroke(1.5.dp, MuistaBlue)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.AccessTime,
-                                contentDescription = null,
-                                tint = MuistaBlue
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.AccessTime,
+                                    contentDescription = null,
+                                    tint = MuistaBlue
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = String.format("%02d:%02d", hour, minute),
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MuistaBlue
+                                )
+                            }
                             Text(
-                                text = String.format("%02d:%02d", hour, minute),
-                                fontSize = 26.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MuistaBlue
+                                text = "Vaihda aika",
+                                color = MuistaRed,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        Text(
-                            text = "Vaihda aika",
-                            color = MuistaRed,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
 
@@ -499,7 +505,7 @@ fun ReminderEditorDialog(
                         soundMode = soundMode,
                         alarmToneUri = alarmToneUri,
                         selectedDays = selectedDays,
-                        monthlyDays = monthlyDays,
+                        monthlyDayTimes = monthlyDayTimes,
                         hour = hour,
                         minute = minute,
                         volumePercent = volumePercent
@@ -552,23 +558,33 @@ fun ReminderEditorDialog(
 
     if (showMonthlyCalendar) {
         MonthlyCalendarDialog(
-            selectedDays = monthlyDays,
-            onToggleDay = { day ->
-                monthlyDays = if (day in monthlyDays) monthlyDays - day else monthlyDays + day
+            selectedDayTimes = monthlyDayTimes,
+            defaultHour = hour,
+            defaultMinute = minute,
+            onSetDayTime = { day, h, m ->
+                monthlyDayTimes = monthlyDayTimes + (day to (h to m))
             },
-            onClearAll = { monthlyDays = emptySet() },
+            onRemoveDay = { day ->
+                monthlyDayTimes = monthlyDayTimes - day
+            },
+            onClearAll = { monthlyDayTimes = emptyMap() },
             onDismiss = { showMonthlyCalendar = false }
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MonthlyCalendarDialog(
-    selectedDays: Set<Int>,
-    onToggleDay: (Int) -> Unit,
+    selectedDayTimes: Map<Int, Pair<Int, Int>>,
+    defaultHour: Int,
+    defaultMinute: Int,
+    onSetDayTime: (Int, Int, Int) -> Unit,
+    onRemoveDay: (Int) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var pickingTimeForDay by remember { mutableStateOf<Int?>(null) }
     val currentMonth = remember { YearMonth.now() }
     val monthNamesFi = remember {
         listOf(
@@ -594,8 +610,8 @@ private fun MonthlyCalendarDialog(
                     color = MuistaBlue
                 )
                 Text(
-                    text = "Paina päiviä, joina muistutus tulee",
-                    fontSize = 13.sp,
+                    text = "Paina päivää asettaaksesi ajan (24h). Uusi painallus poistaa.",
+                    fontSize = 12.sp,
                     color = MuistaBlue.copy(alpha = 0.75f)
                 )
             }
@@ -623,24 +639,42 @@ private fun MonthlyCalendarDialog(
                             val cellIndex = week * 7 + col
                             val dayNumber = cellIndex - firstDayOffset + 1
                             if (dayNumber in 1..daysInMonth) {
-                                val isSelected = dayNumber in selectedDays
+                                val assignedTime = selectedDayTimes[dayNumber]
+                                val isSelected = assignedTime != null
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f)
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(10.dp))
                                         .background(
                                             if (isSelected) MuistaYellow else Color(0xFFF3F4F6)
                                         )
-                                        .clickable { onToggleDay(dayNumber) },
+                                        .clickable {
+                                            if (isSelected) {
+                                                onRemoveDay(dayNumber)
+                                            } else {
+                                                pickingTimeForDay = dayNumber
+                                            }
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "$dayNumber",
-                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                        fontSize = 14.sp,
-                                        color = if (isSelected) MuistaRed else MuistaBlue
-                                    )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "$dayNumber",
+                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                            fontSize = 13.sp,
+                                            color = if (isSelected) MuistaRed else MuistaBlue
+                                        )
+                                        if (assignedTime != null) {
+                                            Text(
+                                                text = String.format("%02d:%02d", assignedTime.first, assignedTime.second),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MuistaBlue,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
                                 }
                             } else {
                                 Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
@@ -667,6 +701,45 @@ private fun MonthlyCalendarDialog(
             }
         }
     )
+
+    val dayToPick = pickingTimeForDay
+    if (dayToPick != null) {
+        val dayTimeState = rememberTimePickerState(
+            initialHour = defaultHour,
+            initialMinute = defaultMinute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { pickingTimeForDay = null },
+            title = {
+                Text(
+                    text = "Kellonaika ($dayToPick. päivä, 24h)",
+                    fontWeight = FontWeight.Bold,
+                    color = MuistaBlue
+                )
+            },
+            text = { TimePicker(state = dayTimeState) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSetDayTime(dayToPick, dayTimeState.hour, dayTimeState.minute)
+                        pickingTimeForDay = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MuistaBlue,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pickingTimeForDay = null }) {
+                    Text("Peruuta", color = MuistaRed)
+                }
+            }
+        )
+    }
 }
 
 private fun testAudio(

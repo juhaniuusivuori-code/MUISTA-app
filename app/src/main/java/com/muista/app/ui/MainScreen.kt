@@ -247,8 +247,15 @@ private fun ReminderCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val headerTime = if (reminder.repeatMode == RepeatMode.WEEKLY) {
+                        reminder.formattedTime()
+                    } else {
+                        reminder.monthlyDayTimes.values.minByOrNull { it.first * 60 + it.second }
+                            ?.let { String.format("%02d:%02d", it.first, it.second) }
+                            ?: "--:--"
+                    }
                     Text(
-                        text = reminder.formattedTime(),
+                        text = headerTime,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MuistaBlue.copy(alpha = cardAlpha)
@@ -334,11 +341,7 @@ private fun ReminderCard(
                         .joinToString(", ") { it.second }
                     dayLabels.ifEmpty { "Ei päiviä valittu" }
                 } else {
-                    if (reminder.monthlyDays.isEmpty()) {
-                        "Ei päiviä valittu"
-                    } else {
-                        "Kuukauden päivät: " + reminder.monthlyDays.sorted().joinToString(", ") { "$it." }
-                    }
+                    reminder.formattedMonthlySchedule()
                 }
 
                 Text(

@@ -29,7 +29,7 @@ data class Reminder(
         DayOfWeek.THURSDAY,
         DayOfWeek.FRIDAY
     ),
-    val monthlyDays: Set<Int> = emptySet(),
+    val monthlyDayTimes: Map<Int, Pair<Int, Int>> = emptyMap(),
     val hour: Int = 9,
     val minute: Int = 0,
     val volumePercent: Int = 80
@@ -38,6 +38,15 @@ data class Reminder(
         get() = id.hashCode()
 
     fun formattedTime(): String = String.format("%02d:%02d", hour, minute)
+
+    fun formattedMonthlySchedule(): String {
+        if (monthlyDayTimes.isEmpty()) return "Ei päiviä valittu"
+        return monthlyDayTimes.entries
+            .sortedBy { it.key }
+            .joinToString(", ") { (day, hm) ->
+                String.format("%d. (%02d:%02d)", day, hm.first, hm.second)
+            }
+    }
 
     fun effectiveSpokenText(): String =
         spokenText.trim().ifEmpty { whatToRemember.trim().ifEmpty { "Muista!" } }

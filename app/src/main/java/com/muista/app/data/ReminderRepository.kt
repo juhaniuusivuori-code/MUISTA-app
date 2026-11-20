@@ -43,8 +43,10 @@ class ReminderRepository(context: Context) {
     private fun toJson(reminder: Reminder): JSONObject {
         val daysArray = JSONArray()
         reminder.selectedDays.forEach { daysArray.put(it.value) }
-        val monthlyDaysArray = JSONArray()
-        reminder.monthlyDays.sorted().forEach { monthlyDaysArray.put(it) }
+        val monthlyTimesObj = JSONObject()
+        reminder.monthlyDayTimes.toSortedMap().forEach { (day, hm) ->
+            monthlyTimesObj.put(day.toString(), String.format("%02d:%02d", hm.first, hm.second))
+        }
         return JSONObject().apply {
             put("id", reminder.id)
             put("isEnabled", reminder.isEnabled)
@@ -54,7 +56,7 @@ class ReminderRepository(context: Context) {
             put("soundMode", reminder.soundMode.name)
             put("alarmToneUri", reminder.alarmToneUri ?: JSONObject.NULL)
             put("selectedDays", daysArray)
-            put("monthlyDays", monthlyDaysArray)
+            put("monthlyDayTimes", monthlyTimesObj)
             put("hour", reminder.hour)
             put("minute", reminder.minute)
             put("volumePercent", reminder.volumePercent)
@@ -69,16 +71,35 @@ class ReminderRepository(context: Context) {
                 if (value in 1..7) add(DayOfWeek.of(value))
             }
         }
-        val monthlyDaysJson = obj.optJSONArray("monthlyDays")
-        val monthlyDays = if (monthlyDaysJson != null) {
-            buildSet {
-                for (i in 0 until monthlyDaysJson.length()) {
-                    val value = monthlyDaysJson.optInt(i, -1)
-                    if (value in 1..31) add(value)
+        val defaultHour = obj.optInt("hour", 9).coerceIn(0, 23)
+        val defaultMinute = obj.optInt("minute", 0).coerceIn(0, 59)
+
+        val monthlyTimesObj = obj.optJSONObject("monthlyDayTimes")
+        val monthlyDayTimes: Map<Int, Pair<Int, Int>> = if (monthlyTimesObj != null) {
+            buildMap {
+                val keys = monthlyTimesObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val day = key.toIntOrNull() ?: continue
+                    if (day !in 1..31) continue
+                    val parts = monthlyTimesObj.optString(key, "").split(":")
+                    val h = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: defaultHour
+                    val m = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: defaultMinute
+                    put(day, h to m)
                 }
             }
         } else {
-            setOf(obj.optInt("monthlyDay", 1).coerceIn(1, 31))
+            val monthlyDaysJson = obj.optJSONArray("monthlyDays")
+            if (monthlyDaysJson != null) {
+                buildMap {
+                    for (i in 0 until monthlyDaysJson.length()) {
+                        val value = monthlyDaysJson.optInt(i, -1)
+                        if (value in 1..31) put(value, defaultHour to defaultMinute)
+                    }
+                }
+            } else {
+                emptyMap()
+            }
         }
         val repeatMode = runCatching {
             RepeatMode.valueOf(obj.optString("repeatMode", RepeatMode.WEEKLY.name))
@@ -99,9 +120,9 @@ class ReminderRepository(context: Context) {
             soundMode = soundMode,
             alarmToneUri = tone,
             selectedDays = days,
-            monthlyDays = monthlyDays,
-            hour = obj.optInt("hour", 9).coerceIn(0, 23),
-            minute = obj.optInt("minute", 0).coerceIn(0, 59),
+            monthlyDayTimes = monthlyDayTimes,
+            hour = defaultHour,
+            minute = defaultMinute,
             volumePercent = obj.optInt("volumePercent", 80).coerceIn(0, 100)
         )
     }
